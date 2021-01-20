@@ -1,109 +1,27 @@
-# asyncHTTPrequest
+# esp32HTTPrequest
 
-Asynchronous HTTP for ESP8266 and ESP32. 
+HTTP and HTTPS for ESP32. 
 Subset of HTTP.
-Built on ESPAsyncTCP (AsyncTCP for ESP32)
+Wrapper class for esp_http_client
 Methods similar in format and use to XmlHTTPrequest in Javascript.
 
 Supports:
 * GET and POST
+* HTTP and HTTPS methods
 * Request and response headers
 * Chunked response
 * Single String response for short (<~5K) responses (heap permitting).
 * optional onData callback.
 * optional onReadyStatechange callback.
+* can be transparently substituted for asyncHTTPrequest (see caveats below)
 
-This library adds a simple HTTP layer on top of the ESPAsyncTCP library to facilitate REST communication from a client to a server. The paradigm is similar to the XMLHttpRequest in Javascript, employing the notion of a ready-state progression through the transaction request.
+This library is a follow on to asyncHTTPrequest created for the ESP8266. Where the need on the ESP8266 was to avoid blocking, this code supports HTTPS. Since sharing the asyncHTTPrequest code, the most common inquiry has been HTTPS support.  This is a work-in-progress. It works for both HTTP and HTTPS, you only need to specify HTTPS in the URL and be sure there is 40K to 50K of heap available for the TLS handshake.
 
-Synchronization can be accomplished using callbacks on ready-state change, a callback on data receipt, or simply polling for ready-state change. Data retrieval can be incremental as received, or bulk retrieved when the transaction completes provided there is enough heap to buffer the entire response.
+The underlying interface to TCP is changed from asyncTCP to the esp_http_client.  It's really just a class wrappper at this point providing a simplified way to use the native C based ESP-IDF http client. It is no longer asynchronous in the way it's predecessor was, however that isn't as important with ESP32 in that FREErtos tasks run asynchronously anyway. Instances of this class can be made to run asynchronously by simply running them in a FREErtos task, which at the end of the day is how the other async methods do it. The only caveat to running asynchronously is that any supplied contiguous data buffers (char*) must remain static.  Data supplied as String or xbuf will be copied to a static buffer.
 
-The underlying buffering uses a new xbuf class. It handles both character and binary data. xbuf uses a chain of small (64 byte) segments that are allocated and added to the tail as data is added and deallocated from the head as data is read, achieving the same result as a dynamic circular buffer limited only by the size of heap. The xbuf implements indexOf and readUntil functions.
+This class should be plug compatible with the older asyncHTTPrequest. It will block during send() and unblock at completion (readystate = 4).  Send can be launched from a separate task to avoid blocking the main task.  Callbacks will still work either way.
 
-For short transactions, buffer space should not be an issue. In fact, it can be more economical than other methods that use larger fixed length buffers. Data is acked when retrieved by the caller, so there is some limited flow control to limit heap usage for larger transfers.
-
-Request and response headers are handled in the typical fashion.
-
-Chunked responses are recognized and handled transparently.
-
-Testing has not been extensive, but it is a fairly lean library, and all of the functions were tested to some degree. It is working flawlessly in the application for which it was designed.
-
-Possibly I'll revisit this in the future and add support for additional HTTP request types like PUT.
-
-See the Wiki for an explanation of the various methods.
+I haven't had the time or motivation to test this beyond my immediate needs, but given the interest expressed in HTTPS for asyncHTTPrequest, I'm pubishing this work-in-progress in the chance that others may provide feedback and hopefully PRs to firm it up.
 
 
 
-
-Following is a snippet of code using this library, along with a sample of the debug output trace from normal operation.  The context is that this code is in a process that runs as a state machine to post data to an external server. Suffice it to say that none of the calls block, and that the program does other things while waiting for the readyState to become 4.
-
-There are a few different methods available to synchronize on completion and to extract the resonse data, especially long responses.  This is a simpler example.
-
-```
-  asyncHTTPrequest request;
-	.
-	.
-	.
-
-   case sendPost:{
-      String URL = EmonURL + ":" + String(EmonPort) + EmonURI + "/input/bulk";
-      request.setTimeout(1);
-      request.setDebug(true);
-	  if(request.debug()){
-        DateTime now = DateTime(UNIXtime() + (localTimeDiff * 3600));
-        String msg = timeString(now.hour()) + ':' + timeString(now.minute()) + ':' + timeString(now.second());
-        Serial.println(msg);
-      }
-      request.open("POST", URL.c_str());
-      String auth = "Bearer " + apiKey;
-      request.setReqHeader("Authorization", auth.c_str());
-      request.setReqHeader("Content-Type","application/x-www-form-urlencoded");
-      request.send(reqData);
-      state = waitPost;
-      return 1;
-    } 
-
-    case waitPost: {
-      if(request.readyState() != 4){
-        return UNIXtime() + 1; 
-      }
-      if(request.responseHTTPcode() != 200){
-        msgLog("EmonService: Post failed: ", request.responseHTTPcode);  
-        state = sendPost;
-        return UNIXtime() + 1;
-      }
-      String response = request.responseText();
-      if( ! response.startsWith("ok")){
-        msgLog("EmonService: response not ok. Retrying.");
-        state = sendPost;
-        return UNIXtime() + 1;
-      }
-      reqData = "";
-      reqEntries = 0;    
-      state = post;
-      return UnixNextPost;
-    }>
-```
-and here's what the debug trace looks like:
-```
-Debug(1991): setDebug(on)
-16:47:50
-Debug(1992): open(POST, emoncms.org:80/input/bulk)
-Debug(  0): _parseURL() HTTP://emoncms.org:80/input/bulk
-Debug(  3): _connect()
-Debug(  6): send(String) time=1519854470&... (43)
-Debug( 10): _buildRequest()
-Debug( 12): _send() 230
-Debug( 14): *can't send
-Debug(190): _onConnect handler
-Debug(190): _setReadyState(1)
-Debug(191): _send() 230
-Debug(191): *sent 230
-Debug(312): _onData handler HTTP/1.1 200 OK... (198)
-Debug(313): _collectHeaders()
-Debug(315): _setReadyState(2)
-Debug(315): _setReadyState(3)
-Debug(315): *all data received - closing TCP
-Debug(319): _onDisconnect handler
-Debug(321): _setReadyState(4)
-Debug(921): responseText() ok... (2)
-```
