@@ -6,6 +6,7 @@ esp32HTTPrequest::esp32HTTPrequest()
     , _HTTPcode(0)
     , _chunked(false)
     , _debug(DEBUG_IOTA_HTTP_SET)
+    , _async(false)
     , _timeout(DEFAULT_RX_TIMEOUT)
     , _lastActivity(0)
     , _requestStartTime(0)
@@ -19,6 +20,7 @@ esp32HTTPrequest::esp32HTTPrequest()
     , _readyStateChangeCBarg(nullptr)
     , _onDataCB(nullptr)
     , _onDataCBarg(nullptr)
+    , _URL(nullptr)
     , _request(nullptr)
     , _response(nullptr)
     , _headers(nullptr)
@@ -34,10 +36,6 @@ esp32HTTPrequest::~esp32HTTPrequest(){
     if(_client){
         esp_http_client_cleanup(_client);
         _client = nullptr;
-    }
-    if(_config){
-        delete _config;
-        _config = nullptr;
     }
     delete _headers;
     delete _request;
@@ -63,8 +61,8 @@ bool    esp32HTTPrequest::debug(){
 }
 
 //**************************************************************************************************************
-bool	esp32HTTPrequest::open(const char* method, const char* URL){
-    DEBUG_HTTP("open(%s, %.*s)\r\n", method, strlen(URL), URL);
+bool	esp32HTTPrequest::open(const char* method, const char* url){
+    DEBUG_HTTP("open(%s, %.*s)\r\n", method, strlen(url), url);
     if(_readyState != readyStateUnsent && _readyState != readyStateDone) {return false;}
     _requestStartTime = millis();
     delete _headers;
@@ -76,8 +74,11 @@ bool	esp32HTTPrequest::open(const char* method, const char* URL){
     _chunked = false;
     _contentRead = 0;
     _readyState = readyStateUnsent;
-    _addHeader("host", "emoncms.org");
-
+    if( ! _parseURL(url)){
+        DEBUG_HTTP("_parseURL failed\n");
+        return false;
+    }
+    _addHeader("host", _URL->host);
     if (strcmp(method, "GET") == 0) {
         _HTTPmethod = HTTP_METHOD_GET;
     } else if (strcmp(method, "POST") == 0) {
@@ -86,13 +87,13 @@ bool	esp32HTTPrequest::open(const char* method, const char* URL){
         return false;
 
     if(!_client){
-        _config = new esp_http_client_config_t;
-        memset(_config, 0, sizeof(esp_http_client_config_t));
-        _config->url = URL;
-        _config->method = _HTTPmethod;
-        _config->event_handler = http_event_handle;
-        _config->user_data = this;
-        _client = esp_http_client_init(_config);
+        esp_http_client_config_t config;
+        memset(&config, 0, sizeof(config));
+        config.url = url,
+        config.method = _HTTPmethod;
+        config.event_handler = http_event_handle;
+        config.user_data = this;
+        _client = esp_http_client_init(&config);
         if(!_client){
            DEBUG_HTTP("client_init failed\n");
            return false;
@@ -100,7 +101,7 @@ bool	esp32HTTPrequest::open(const char* method, const char* URL){
     }
     else {
         esp_http_client_set_method(_client, _HTTPmethod);
-        esp_http_client_set_url(_client, URL);
+        esp_http_client_set_url(_client, url);
     }
     _lastActivity = millis();
     return true;
@@ -159,7 +160,7 @@ bool	esp32HTTPrequest::send(const uint8_t* body, size_t len){
 bool	esp32HTTPrequest::send(xbuf* body, size_t len){
     DEBUG_HTTP("send(char*) %s.16... (%d)\r\n", body->peekString(16).c_str(), len);
     _seize;
-    _request = (char *)ps_malloc(len); //new char[len];
+    _request = (char *)ps_malloc(len);
     body->read((uint8_t*)_request, len);
     _send(_request, len);
     _release;
@@ -200,6 +201,7 @@ String	esp32HTTPrequest::responseText(){
         DEBUG_HTTP("!responseText() no buffer\r\n")
         _HTTPcode = HTTPCODE_TOO_LESS_RAM;
         esp_http_client_close(_client);
+        _client = nullptr;
         return String();
     }
     _contentRead += localString.length();
@@ -280,16 +282,27 @@ size_t  esp32HTTPrequest::_send(const char* body, size_t len){
     }
     delete _headers;
     _headers = nullptr;
+    _requestLen = len;
     if(len){
-        esp_http_client_set_post_field(_client, body, len);
+      esp_http_client_set_post_field(_client, body, len);
+    }
+    bool isTLS = strcmp(_URL->scheme, "HTTPS") == 0;
+    if(isTLS){
+        xSemaphoreTake(TLSlock_S, portMAX_DELAY);
     }
     esp_err_t err;
     do{
-       err = esp_http_client_perform(_client);
+        err = esp_http_client_perform(_client);
     } while(err == ESP_ERR_HTTP_EAGAIN);
-
-    if(err != ESP_OK){
-        DEBUG_HTTP("perform failed  %s\r\n", esp_err_to_name(err));
+    if(isTLS){
+        xSemaphoreGive(TLSlock_S);
+    }
+     if(err != ESP_OK){
+         _HTTPcode = HTTPCODE_PERFORM_FAILED;
+         Serial.printf("perform failed %d, %s\n", err, esp_err_to_name(err));
+         DEBUG_HTTP("perform failed  %s\r\n", esp_err_to_name(err));
+         abort();
+         _setReadyState(readyStateDone);
     }
     _lastActivity = millis(); 
     return len;
@@ -304,6 +317,81 @@ void  esp32HTTPrequest::_setReadyState(readyStates newState){
             _readyStateChangeCB(_readyStateChangeCBarg, this, _readyState);
         }
     } 
+}
+
+//**************************************************************************************************************
+bool  esp32HTTPrequest::_parseURL(const char* url){
+    delete _URL;
+    _URL = new URL;
+    _URL->buffer = new char[strlen(url) + 8];
+    char *bufptr = _URL->buffer;
+    const char *urlptr = url;
+
+        // Find first delimiter
+
+    int seglen = strcspn(urlptr, ":/?");
+
+        // scheme
+
+    _URL->scheme = bufptr;
+    if(! memcmp(urlptr+seglen, "://", 3)){
+        while(seglen--){
+            *bufptr++ = toupper(*urlptr++);
+        }
+        urlptr += 3;
+        seglen = strcspn(urlptr, ":/?");
+    }
+    else {
+        memcpy(bufptr, "HTTP", 4);
+        bufptr += 4;
+    }
+    *bufptr++ = 0;
+
+        // host
+
+    _URL->host = bufptr;
+    memcpy(bufptr, urlptr, seglen);
+    bufptr += seglen;
+    *bufptr++ = 0;
+    urlptr += seglen;
+
+        // port
+
+    _URL->port = bufptr;
+    if(*urlptr == ':'){
+        urlptr++;
+        seglen = strcspn(urlptr, "/?");
+        memcpy(bufptr, urlptr, seglen);
+        bufptr += seglen;
+        urlptr += seglen;
+    }
+    *bufptr++ = 0;
+
+        // path 
+
+    _URL->path = bufptr;
+    *bufptr++ = '/';
+    if(*urlptr == '/'){
+        seglen = strcspn(++urlptr, "?");
+        memcpy(bufptr, urlptr, seglen);
+        bufptr += seglen;
+        urlptr += seglen;
+    }
+    *bufptr++ = 0;
+
+        // query
+
+    _URL->query = bufptr;
+    if(*urlptr == '?'){
+        seglen = strlen(urlptr);
+        memcpy(bufptr, urlptr, seglen);
+        bufptr += seglen;
+        urlptr += seglen;
+    }
+    *bufptr++ = 0;
+
+    DEBUG_HTTP("_parseURL() %s://%s:%d%s%.16s\r\n", _URL->scheme, _URL->host, _URL->port, _URL->path, _URL->query);
+    return true;
 }
 
 /*______________________________________________________________________________________________________________
@@ -351,6 +439,8 @@ esp_err_t esp32HTTPrequest::_http_event_handle(esp_http_client_event_t * evt)
             DEBUG_HTTP("client finish event\n");
             _HTTPcode = esp_http_client_get_status_code(_client);
             _setReadyState(readyStateDone);
+            delete _request;
+            _request = nullptr;
             while(_onDataCB && _response->available()){
                 _lastActivity = millis(); 
                 _onDataCB(_onDataCBarg, this, available());
@@ -396,11 +486,11 @@ void  esp32HTTPrequest::_onData(void* Vbuf, size_t len){
 
     _release;            
 
-                // If onData callback requested, do so.
-
-    if(available() > HTTP_REQUEST_MAX_RECV_BUFFER){
+    if(available() > HTTP_REQUEST_MAX_RX_BUFFER){
         esp_http_client_close(_client);
     }            
+
+                // If onData callback requested, do so.
 
     while(_onDataCB && available() > 0){
         _onDataCB(_onDataCBarg, this, available());
@@ -604,3 +694,6 @@ char* esp32HTTPrequest::_charstar(const __FlashStringHelper * str){
   strcpy_P(ptr, (PGM_P)str);
   return ptr;
 }
+
+QueueHandle_t esp32HTTPS_Q = nullptr;
+TaskHandle_t esp32HTTPS_T = nullptr;

@@ -40,7 +40,8 @@
                                     DEBUG_IOTA_PORT.printf_P(PSTR(format),##__VA_ARGS__);}
 
 #define DEFAULT_RX_TIMEOUT 3                    // Seconds for timeout
-#define HTTP_REQUEST_MAX_RECV_BUFFER 2000
+#define HTTP_REQUEST_MAX_RX_BUFFER 1040
+#define HTTP_REQUEST_MAX_TX_BUFFER 1040
 
 #define HTTPCODE_CONNECTION_REFUSED  (-1)
 #define HTTPCODE_SEND_HEADER_FAILED  (-2)
@@ -53,8 +54,16 @@
 #define HTTPCODE_ENCODING            (-9)
 #define HTTPCODE_STREAM_WRITE        (-10)
 #define HTTPCODE_TIMEOUT             (-11)
+#define HTTPCODE_PERFORM_FAILED      (-12)
+#define HTTPCODE_OPEN_FAILED         (-13) 
 
 esp_err_t http_event_handle(esp_http_client_event_t *evt);
+void HTTPperform(void *);
+
+extern SemaphoreHandle_t TLSlock_S;     // Mutex to limit to one HTTPS active
+extern QueueHandle_t esp32HTTPS_Q;
+extern TaskHandle_t esp32HTTPS_T;
+void esp32HTTPS_task(void *);
 
 class esp32HTTPrequest {
 
@@ -108,6 +117,7 @@ class esp32HTTPrequest {
     //__________________________________________________________________________________________________________*/
     void    setDebug(bool);                                         // Turn debug message on/off
     bool    debug();                                                // is debug on or off?
+    void    async(bool set) { _async = set; }
 
     bool    open(const char* /*GET/POST*/, const char* URL);        // Initiate a request
     void    onReadyStateChange(readyStateChangeCB, void* arg = 0);  // Optional event handler for ready state change
@@ -150,6 +160,7 @@ class esp32HTTPrequest {
 
     // DO NOT USE THIS FUNCTION!!
 
+    esp_http_client_handle_t client() { return _client; };
     esp_err_t _http_event_handle(esp_http_client_event_t *evt);
 
     //___________________________________________________________________________________________________________________________________
@@ -168,6 +179,7 @@ class esp32HTTPrequest {
     int16_t         _HTTPcode;                  // HTTP response code or (negative) exception code
     bool            _chunked;                   // Processing chunked response
     bool            _debug;                     // Debug state
+    bool            _async;                     // Perform using forked task
     uint32_t        _timeout;                   // Default or user overide RxTimeout in seconds
     uint32_t        _lastActivity;              // Time of last activity 
     uint32_t        _requestStartTime;          // Time last open() issued
@@ -175,20 +187,22 @@ class esp32HTTPrequest {
     char*           _connectedHost;             // Host when connected
     int             _connectedPort;             // Port when connected
     esp_http_client_handle_t _client;           // ESPAsyncTCP AsyncClient instance
-    esp_http_client_config_t* _config;          // esp_HTTP_client config structure
+    
     size_t          _contentLength;             // content-length header value or sum of chunk headers  
     size_t          _contentRead;               // number of bytes retrieved by user since last open()
     readyStateChangeCB  _readyStateChangeCB;    // optional callback for readyState change
     void*           _readyStateChangeCBarg;     // associated user argument
     onDataCB        _onDataCB;                  // optional callback when data received
     void*           _onDataCBarg;               // associated user argument
+    URL*            _URL;
 
     SemaphoreHandle_t threadLock;
 
     // request and response String buffers and header list (same queue for request and response).   
 
     char*       _request;                       // Tx data buffer for POST
-	  xbuf*       _response;                      // Rx data buffer
+    int         _requestLen;
+    xbuf*       _response;                      // Rx data buffer
     header*     _headers;                       // request or (readyState > readyStateHdrsRcvd) response headers    
 
     // Protected functions
