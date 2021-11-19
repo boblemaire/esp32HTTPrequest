@@ -1,0 +1,21 @@
+{
+  "name": "esp32HTTPrequest",
+  "version": "0.0.0",
+  "description": "Wrapper class for esp_http_client Methods similar in format and use to XmlHTTPrequest in Javascript",
+  "keywords": "esp32,https",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/boblemaire/esp32HTTPrequest.git",
+    "branch": "main"
+  },
+  "authors": [
+    {
+      "name": "boblemaire"
+    }
+  ],
+  "license": "GPL-3.0-or-later",
+  "platforms": "espressif32",
+  "build": {
+    "includeDir": "."
+  }
+}
