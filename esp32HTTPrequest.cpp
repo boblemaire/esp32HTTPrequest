@@ -310,7 +310,6 @@ size_t  esp32HTTPrequest::_send(const char* body, size_t len){
     }
      if(err != ESP_OK){
          _HTTPcode = HTTPCODE_PERFORM_FAILED;
-         Serial.printf("perform failed %d, %s\n", err, esp_err_to_name(err));
          DEBUG_HTTP("perform failed  %s\r\n", esp_err_to_name(err));
          abort();
          _setReadyState(readyStateDone);
@@ -401,7 +400,7 @@ bool  esp32HTTPrequest::_parseURL(const char* url){
     }
     *bufptr++ = 0;
 
-    DEBUG_HTTP("_parseURL() %s://%s:%d%s%.16s\r\n", _URL->scheme, _URL->host, _URL->port, _URL->path, _URL->query);
+    DEBUG_HTTP("_parseURL() %s://%s:%s%s%.32s\r\n", _URL->scheme, _URL->host, _URL->port, _URL->path, _URL->query);
     return true;
 }
 
@@ -425,7 +424,6 @@ esp_err_t http_event_handle(esp_http_client_event_t *evt)
 
 esp_err_t esp32HTTPrequest::_http_event_handle(esp_http_client_event_t * evt)
 {
-    esp32HTTPrequest *_this = (esp32HTTPrequest*)evt->user_data;
     switch(evt->event_id) {
         case HTTP_EVENT_ERROR:
             DEBUG_HTTP("HTTP_EVENT_ERROR\n");
@@ -478,10 +476,12 @@ void  esp32HTTPrequest::_onData(void* Vbuf, size_t len){
     if(! _response){
         _response = new xbuf;
         _contentRead = 0;
-        if (_chunked)
+        if (_chunked){
             _contentLength = 0;
-        else
+        }
+        else {
             _contentLength = esp_http_client_get_content_length(_client);
+        }
     }
     
                 // Transfer data to xbuf

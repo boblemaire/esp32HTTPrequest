@@ -1,5 +1,5 @@
 #ifndef esp32HTTPrequest_h
-#define esp32HTTPrequest_h "1.1.16"
+#define esp32HTTPrequest_h "1.1.17"
 
    /***********************************************************************************
     Copyright (C) <2018>  <Bob Lemaire, IoTaWatt, Inc.>
