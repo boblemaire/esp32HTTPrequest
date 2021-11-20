@@ -1,5 +1,13 @@
 #include "esp32HTTPrequest.h"
 
+// ESP32 does not seem to reliably handle multiple cocurrent TLS requests.
+// This semaphore controls the number of concurrent requests.
+// ESP32_HTTP_REQUEST_MAX_TLS can be set to allow more than one.
+// The semaphore is created in the constructor of the first instance
+// of esp32HTTPrequest and the handle is saved here.
+
+SemaphoreHandle_t TLSlock_S = nullptr;
+
 //**************************************************************************************************************
 esp32HTTPrequest::esp32HTTPrequest()
     : _readyState(readyStateUnsent)
@@ -28,6 +36,9 @@ esp32HTTPrequest::esp32HTTPrequest()
     DEBUG_HTTP("New request.");
 #ifdef ESP32
     threadLock = xSemaphoreCreateRecursiveMutex();
+    if( ! TLSlock_S){
+        TLSlock_S = xSemaphoreCreateCounting(ESP32_HTTP_REQUEST_MAX_TLS, ESP32_HTTP_REQUEST_MAX_TLS);
+    } 
 #endif
 }
 
@@ -695,5 +706,3 @@ char* esp32HTTPrequest::_charstar(const __FlashStringHelper * str){
   return ptr;
 }
 
-QueueHandle_t esp32HTTPS_Q = nullptr;
-TaskHandle_t esp32HTTPS_T = nullptr;

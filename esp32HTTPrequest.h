@@ -1,5 +1,5 @@
 #ifndef esp32HTTPrequest_h
-#define esp32HTTPrequest_h "1.1.15"
+#define esp32HTTPrequest_h "1.1.16"
 
    /***********************************************************************************
     Copyright (C) <2018>  <Bob Lemaire, IoTaWatt, Inc.>
@@ -55,14 +55,15 @@
 #define HTTPCODE_STREAM_WRITE        (-10)
 #define HTTPCODE_TIMEOUT             (-11)
 #define HTTPCODE_PERFORM_FAILED      (-12)
-#define HTTPCODE_OPEN_FAILED         (-13) 
+#define HTTPCODE_OPEN_FAILED         (-13)
+
+#ifndef ESP32_HTTP_REQUEST_MAX_TLS
+  #define ESP32_HTTP_REQUEST_MAX_TLS 1
+#endif
 
 esp_err_t http_event_handle(esp_http_client_event_t *evt);
 void HTTPperform(void *);
 
-extern SemaphoreHandle_t TLSlock_S;     // Mutex to limit to one HTTPS active
-extern QueueHandle_t esp32HTTPS_Q;
-extern TaskHandle_t esp32HTTPS_T;
 void esp32HTTPS_task(void *);
 
 class esp32HTTPrequest {
