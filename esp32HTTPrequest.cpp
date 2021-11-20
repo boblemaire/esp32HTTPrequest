@@ -470,17 +470,20 @@ void  esp32HTTPrequest::_onData(void* Vbuf, size_t len){
     _seize;
     _lastActivity = millis();
 
-    if(! _response){
-        _response = new xbuf;
-        _contentRead = 0;
-        _contentLength = esp_http_client_get_content_length(_client);
-    }
-    
     if(!_chunked && esp_http_client_is_chunked_response(_client)){
         _chunked = true;
         DEBUG_HTTP("Response is chunked.\n");
     } 
               
+    if(! _response){
+        _response = new xbuf;
+        _contentRead = 0;
+        if (_chunked)
+            _contentLength = 0;
+        else
+            _contentLength = esp_http_client_get_content_length(_client);
+    }
+    
                 // Transfer data to xbuf
 
     _response->write((uint8_t*)Vbuf, len);
