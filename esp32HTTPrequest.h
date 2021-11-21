@@ -119,6 +119,7 @@ class esp32HTTPrequest {
     void    setDebug(bool);                                         // Turn debug message on/off
     bool    debug();                                                // is debug on or off?
     void    async(bool set) { _async = set; }
+    void	setClientBufferSize(int);                               // overide default client buffer size (bytes)
 
     bool    open(const char* /*GET/POST*/, const char* URL);        // Initiate a request
     void    onReadyStateChange(readyStateChangeCB, void* arg = 0);  // Optional event handler for ready state change
@@ -181,6 +182,7 @@ class esp32HTTPrequest {
     bool            _chunked;                   // Processing chunked response
     bool            _debug;                     // Debug state
     bool            _async;                     // Perform using forked task
+    int             _clientBufferSize;          // Client buffer size (0 = use framework default)
     uint32_t        _timeout;                   // Default or user overide RxTimeout in seconds
     uint32_t        _lastActivity;              // Time of last activity 
     uint32_t        _requestStartTime;          // Time last open() issued

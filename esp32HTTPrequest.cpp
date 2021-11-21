@@ -15,6 +15,7 @@ esp32HTTPrequest::esp32HTTPrequest()
     , _chunked(false)
     , _debug(DEBUG_IOTA_HTTP_SET)
     , _async(false)
+    , _clientBufferSize(0)
     , _timeout(DEFAULT_RX_TIMEOUT)
     , _lastActivity(0)
     , _requestStartTime(0)
@@ -104,6 +105,7 @@ bool	esp32HTTPrequest::open(const char* method, const char* url){
         config.method = _HTTPmethod;
         config.event_handler = http_event_handle;
         config.user_data = this;
+        config.buffer_size = _clientBufferSize;
         _client = esp_http_client_init(&config);
         if(!_client){
            DEBUG_HTTP("client_init failed\n");
@@ -127,6 +129,11 @@ void    esp32HTTPrequest::onReadyStateChange(readyStateChangeCB cb, void* arg){
 void	esp32HTTPrequest::setTimeout(int seconds){
     DEBUG_HTTP("setTimeout(%d)\r\n", seconds);
     _timeout = seconds;
+}
+
+void	esp32HTTPrequest::setClientBufferSize(int bytes){
+    DEBUG_HTTP("setClientBufferSize(%d)\r\n", bytes);
+    _clientBufferSize = bytes;
 }
 
 //**************************************************************************************************************
