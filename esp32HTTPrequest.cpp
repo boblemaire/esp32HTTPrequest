@@ -104,6 +104,7 @@ bool	esp32HTTPrequest::open(const char* method, const char* url){
         config.method = _HTTPmethod;
         config.event_handler = http_event_handle;
         config.user_data = this;
+        config.buffer_size = 1440;
         _client = esp_http_client_init(&config);
         if(!_client){
            DEBUG_HTTP("client_init failed\n");
