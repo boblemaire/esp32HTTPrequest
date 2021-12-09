@@ -1,6 +1,6 @@
 {
   "name": "esp32HTTPrequest",
-  "version": "1.1.18",
+  "version": "1.1.19",
   "description": "Wrapper class for esp_http_client Methods similar in format and use to XmlHTTPrequest in Javascript",
   "keywords": "esp32,https",
   "repository": {

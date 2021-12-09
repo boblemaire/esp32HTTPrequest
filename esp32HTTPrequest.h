@@ -1,5 +1,5 @@
 #ifndef esp32HTTPrequest_h
-#define esp32HTTPrequest_h "1.1.18"
+#define esp32HTTPrequest_h "1.1.19"
 
    /***********************************************************************************
     Copyright (C) <2018>  <Bob Lemaire, IoTaWatt, Inc.>
@@ -40,8 +40,8 @@
                                     DEBUG_IOTA_PORT.printf_P(PSTR(format),##__VA_ARGS__);}
 
 #define DEFAULT_RX_TIMEOUT 3                    // Seconds for timeout
-#define HTTP_REQUEST_MAX_RX_BUFFER 1040
-#define HTTP_REQUEST_MAX_TX_BUFFER 1040
+#define HTTP_REQUEST_MAX_RX_BUFFER 1440
+#define HTTP_REQUEST_MAX_TX_BUFFER 1440
 
 #define HTTPCODE_CONNECTION_REFUSED  (-1)
 #define HTTPCODE_SEND_HEADER_FAILED  (-2)
