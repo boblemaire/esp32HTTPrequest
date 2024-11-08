@@ -35,6 +35,7 @@
 #include <xbuf.h>
 #include "esp_HTTP_client.h"
 
+
 #define DEBUG_HTTP(format,...)  if(_debug){\
                                     DEBUG_IOTA_PORT.printf("Debug(%3ld): ", millis()-_requestStartTime);\
                                     DEBUG_IOTA_PORT.printf_P(PSTR(format),##__VA_ARGS__);}
@@ -119,6 +120,8 @@ class esp32HTTPrequest {
     void    setDebug(bool);                                         // Turn debug message on/off
     bool    debug();                                                // is debug on or off?
     void    async(bool set) { _async = set; }
+    void    setCert(const uint8_t *pem, size_t len);                // Specify .pem file for tls
+    void    useGlobalCAStore(bool);                                 // Use Global Cert pool
 
     bool    open(const char* /*GET/POST*/, const char* URL);        // Initiate a request
     void    onReadyStateChange(readyStateChangeCB, void* arg = 0);  // Optional event handler for ready state change
@@ -196,6 +199,10 @@ class esp32HTTPrequest {
     onDataCB        _onDataCB;                  // optional callback when data received
     void*           _onDataCBarg;               // associated user argument
     URL*            _URL;
+
+    const uint8_t*  _cert_pem;                  // -> .pem file for TLS
+    size_t          _cert_len;                  // length of .pem file
+    bool            _useGlobalCAStore;
 
     SemaphoreHandle_t threadLock;
 
