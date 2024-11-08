@@ -29,9 +29,10 @@ esp32HTTPrequest::esp32HTTPrequest()
     , _onDataCB(nullptr)
     , _onDataCBarg(nullptr)
     , _URL(nullptr)
-    , _request(nullptr)
-    , _response(nullptr)
-    , _headers(nullptr)
+    , _cert_pem(nullptr)
+    , _cert_len(0)
+    , _useGlobalCAStore(false)
+    , _request(nullptr), _response(nullptr), _headers(nullptr)
 {
     DEBUG_HTTP("New request.");
 #ifdef ESP32
@@ -72,6 +73,16 @@ bool    esp32HTTPrequest::debug(){
 }
 
 //**************************************************************************************************************
+void    esp32HTTPrequest::setCert(const uint8_t* pem, size_t len){
+    _cert_pem = pem;
+    _cert_len = len;
+}
+//**************************************************************************************************************
+void    esp32HTTPrequest::useGlobalCAStore(bool globalCA){
+    _useGlobalCAStore = globalCA;
+} 
+
+//**************************************************************************************************************
 bool	esp32HTTPrequest::open(const char* method, const char* url){
     DEBUG_HTTP("open(%s, %.*s)\r\n", method, strlen(url), url);
     if(_readyState != readyStateUnsent && _readyState != readyStateDone) {return false;}
@@ -105,6 +116,9 @@ bool	esp32HTTPrequest::open(const char* method, const char* url){
         config.event_handler = http_event_handle;
         config.user_data = this;
         config.buffer_size = HTTP_REQUEST_MAX_RX_BUFFER;
+        config.cert_pem = (char*) _cert_pem;
+        config.cert_len = _cert_len;
+        config.use_global_ca_store = _useGlobalCAStore;
         _client = esp_http_client_init(&config);
         if(!_client){
            DEBUG_HTTP("client_init failed\n");
