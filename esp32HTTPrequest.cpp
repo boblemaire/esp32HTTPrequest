@@ -317,17 +317,23 @@ size_t  esp32HTTPrequest::_send(const char* body, size_t len){
         xSemaphoreTake(TLSlock_S, portMAX_DELAY);
     }
     esp_err_t err;
-    do{
+    while(true){
         err = esp_http_client_perform(_client);
-    } while(err == ESP_ERR_HTTP_EAGAIN);
+        if(err == ESP_ERR_HTTP_FETCH_HEADER){
+            esp_http_client_close(_client);
+        }
+        else if(err != ESP_ERR_HTTP_EAGAIN){
+            break;
+        }
+    }
     if(isTLS){
         xSemaphoreGive(TLSlock_S);
     }
-     if(err != ESP_OK){
-         _HTTPcode = HTTPCODE_PERFORM_FAILED;
-         DEBUG_HTTP("perform failed  %s\r\n", esp_err_to_name(err));
-         abort();
-         _setReadyState(readyStateDone);
+    if(err != ESP_OK){
+        _HTTPcode = HTTPCODE_PERFORM_FAILED;
+        DEBUG_HTTP("perform failed  %s\r\n", esp_err_to_name(err));
+        abort();
+        _setReadyState(readyStateDone);
     }
     _lastActivity = millis(); 
     return len;
