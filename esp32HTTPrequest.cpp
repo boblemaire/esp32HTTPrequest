@@ -317,15 +317,9 @@ size_t  esp32HTTPrequest::_send(const char* body, size_t len){
         xSemaphoreTake(TLSlock_S, portMAX_DELAY);
     }
     esp_err_t err;
-    while(true){
+    do {
         err = esp_http_client_perform(_client);
-        if(err == ESP_ERR_HTTP_FETCH_HEADER){
-            esp_http_client_close(_client);
-        }
-        else if(err != ESP_ERR_HTTP_EAGAIN){
-            break;
-        }
-    }
+    } while (err == ESP_ERR_HTTP_EAGAIN);
     if(isTLS){
         xSemaphoreGive(TLSlock_S);
     }
@@ -465,19 +459,23 @@ esp_err_t esp32HTTPrequest::_http_event_handle(esp_http_client_event_t * evt)
             _setReadyState(readyStateHdrsRecvd);
             _onData(evt->data, evt->data_len);
             break;
+        case HTTP_EVENT_DISCONNECTED:
+            DEBUG_HTTP("disconnect event\n");
+            break;
         case HTTP_EVENT_ON_FINISH:
             DEBUG_HTTP("client finish event\n");
             _HTTPcode = esp_http_client_get_status_code(_client);
             _setReadyState(readyStateDone);
             delete _request;
             _request = nullptr;
+            // String connection = respHeaderValue("connection");
+            // if(!connection.equalsIgnoreCase("keep-alive")){
+            //     esp_http_client_close(_client); 
+            // }
             while(_onDataCB && _response->available()){
                 _lastActivity = millis(); 
                 _onDataCB(_onDataCBarg, this, available());
             }
-            break;
-        case HTTP_EVENT_DISCONNECTED:
-            DEBUG_HTTP("disconnect event\n");
             break;
     }
     return ESP_OK;
