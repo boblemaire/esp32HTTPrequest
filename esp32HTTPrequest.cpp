@@ -257,6 +257,9 @@ size_t	esp32HTTPrequest::available(){
     if(_chunked && (_contentLength - _contentRead) < _response->available()){
         return _contentLength - _contentRead;
     }
+    if( ! _response){
+        return 0;
+    }
     return _response->available();
 }
 
