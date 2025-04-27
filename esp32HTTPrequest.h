@@ -63,9 +63,8 @@
 #endif
 
 esp_err_t http_event_handle(esp_http_client_event_t *evt);
-void HTTPperform(void *);
 
-void esp32HTTPS_task(void *);
+extern SemaphoreHandle_t TLSlock_S;
 
 class esp32HTTPrequest {
 
@@ -188,7 +187,6 @@ class esp32HTTPrequest {
     uint32_t        _lastActivity;              // Time of last activity 
     uint32_t        _requestStartTime;          // Time last open() issued
     uint32_t        _requestEndTime;            // Time of last disconnect
-    char*           _connectedHost;             // Host when connected
     int             _connectedPort;             // Port when connected
     esp_http_client_handle_t _client;           // ESPAsyncTCP AsyncClient instance
     

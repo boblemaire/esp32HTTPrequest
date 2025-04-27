@@ -19,7 +19,6 @@ esp32HTTPrequest::esp32HTTPrequest()
     , _lastActivity(0)
     , _requestStartTime(0)
     , _requestEndTime(0)
-    , _connectedHost(nullptr)
     , _connectedPort(-1)
     , _client(nullptr)
     , _contentLength(0)
@@ -35,12 +34,10 @@ esp32HTTPrequest::esp32HTTPrequest()
     , _request(nullptr), _response(nullptr), _headers(nullptr)
 {
     DEBUG_HTTP("New request.");
-#ifdef ESP32
     threadLock = xSemaphoreCreateRecursiveMutex();
     if( ! TLSlock_S){
         TLSlock_S = xSemaphoreCreateCounting(ESP32_HTTP_REQUEST_MAX_TLS, ESP32_HTTP_REQUEST_MAX_TLS);
     } 
-#endif
 }
 
 //**************************************************************************************************************
@@ -52,10 +49,8 @@ esp32HTTPrequest::~esp32HTTPrequest(){
     delete _headers;
     delete _request;
     delete _response;
-    delete[] _connectedHost;
-#ifdef ESP32
+    delete _URL;
     vSemaphoreDelete(threadLock);
-#endif
 }
 
 //**************************************************************************************************************
